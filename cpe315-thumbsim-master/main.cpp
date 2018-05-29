@@ -52,7 +52,7 @@ int main(int argc, char ** argv) {
   cout << "Starting at PC " << hex << pc << endl;
   rf.write(15, pc);
   while(imem.inRange(rf[15])) {
-    execute();
+     execute();
   }
 
   if (opts.dump) {

@@ -1,4 +1,5 @@
 #include "thumbsim.hpp"
+#include <iostream>
 // These are just the register NUMBERS
 #define PC_REG 15  
 #define LR_REG 14
@@ -30,7 +31,10 @@ ASPR flags;
 // CPE 315: You need to implement a function to set the Negative and Zero
 // flags for each instruction that does that. It only needs to take
 // one parameter as input, the result of whatever operation is executing
-
+void setNegativeZero(unsigned short rd, int i)
+{
+   return;
+}
 // This function is complete, you should not have to modify it
 void setCarryOverflow (int num1, int num2, OFType oftype) {
   switch (oftype) {
@@ -139,10 +143,11 @@ void execute() {
   // the following counts as a read to PC
   unsigned int pctarget = PC + 2;
   unsigned int addr;
-  int i, n, offset;
+  int i, n, offset, iso;
   unsigned int list, mask;
   int num1, num2, result, BitCount;
   unsigned int bit;
+  
 
   /* Convert instruction to correct type */
   /* Types are described in Section A5 of the armv7 manual */
@@ -170,7 +175,6 @@ void execute() {
   rf.write(PC_REG, pctarget);
 
   itype = decode(ALL_Types(instr));
-
   // CPE 315: The bulk of your work is in the following switch statement
   // All instructions will need to have stats and cache access info added
   // as appropriate for that instruction.
@@ -183,26 +187,45 @@ void execute() {
         case ALU_ADDR:
           // needs stats and flags
           rf.write(alu.instr.addr.rd, rf[alu.instr.addr.rn] + rf[alu.instr.addr.rm]);
+          //cout << "\t\taluaddr" << endl;
           break;
         case ALU_SUBR:
+          // needs stats and flags
+          rf.write(alu.instr.subr.rd, rf[alu.instr.subr.rn] - rf[alu.instr.subr.rm]);
+          //cout << "\t\talusubr" << endl;
           break;
         case ALU_ADD3I:
           // needs stats and flags
           rf.write(alu.instr.add3i.rd, rf[alu.instr.add3i.rn] + alu.instr.add3i.imm);
+          //cout << "\t\taluadd3i" << endl;
           break;
         case ALU_SUB3I:
+          // needs stats and flags
+          rf.write(alu.instr.add3i.rd, rf[alu.instr.add3i.rn] - alu.instr.add3i.imm);
+          //cout << "\t\talusub3i" << endl;
           break;
         case ALU_MOV:
-          // needs stats and flags
+          // from in class:
           rf.write(alu.instr.mov.rdn, alu.instr.mov.imm);
+          // setting flags:
+          setNegativeZero(rf[alu.instr.mov.rdn], 32);
+          // stats:
+          stats.numRegWrites += 1;
+          //cout << "\t\talumov" << endl;
           break;
         case ALU_CMP:
+          // subtract, set cpsr imm or reg?
+           
           break;
         case ALU_ADD8I:
           // needs stats and flags
           rf.write(alu.instr.add8i.rdn, rf[alu.instr.add8i.rdn] + alu.instr.add8i.imm);
+          //cout << "\t\taluadd8i" << endl;
           break;
         case ALU_SUB8I:
+          rf.write(alu.instr.sub8i.rdn, rf[alu.instr.sub8i.rdn] - alu.instr.sub8i.imm);
+          
+         // cout << "\t\talusub8i" << endl;
           break;
         default:
           cout << "instruction not implemented" << endl;
@@ -255,8 +278,11 @@ void execute() {
         case SP_MOV:
           // needs stats and flags
           rf.write((sp.instr.mov.d << 3 ) | sp.instr.mov.rd, rf[sp.instr.mov.rm]);
+          //cout << "\t\tspmov" << endl;
           break;
         case SP_ADD:
+          //cout << "\t\twhat is this" << endl;
+          break;
         case SP_CMP:
           // need to implement these
           break;
@@ -300,19 +326,74 @@ void execute() {
     case MISC:
       misc_ops = decode(misc);
       switch(misc_ops) {
-        case MISC_PUSH:
-          // need to implement
+        case MISC_PUSH: // arm page 389
+         // need to implement: MAKE IT PUSH LAST-> FIRST
+          iso = 128; // puts a 1 in the 7th bit to compare to reglist
+          printf("lr is : %d\npc is: %d\nsp is: %d\n", LR_REG, PC_REG, SP_REG);
+          printf("reglist: %d\n", misc.instr.push.reg_list);
+          for(int j = 0; j <= 15; j++)
+            {
+               printf("r%d: %d\n", j, rf[j]);
+            }
+          // push.m is the lr bit, can only push r0-r7
+          if(misc.instr.push.m > 0)
+          {
+               rf.write(rf[SP_REG], (rf[SP_REG] - 4)); 
+               rf.write(rf[SP_REG], rf[LR_REG]);
+               printf("pushing lr\n");
+
+          }
+          for(int j = 7; j >= 0; j--)
+          {
+
+               printf("in loop, register %d: %s\n", j, ((iso & misc.instr.push.reg_list > 0)? "true" : "false"));
+               if( (iso & misc.instr.push.reg_list) > 0){
+                  rf.write(rf[SP_REG], rf[SP_REG] - 4); 
+                  rf.write(rf[SP_REG], rf[j]);
+                  printf("\tactually pushing r%d[%d].\n", j, rf[SP_REG]);
+               }
+               iso >>= 1;
+          }
+          printf("stack after pushes: %d\n", rf[SP_REG]);
+          //cout << "\t\tpushed" << endl;
           break;
-        case MISC_POP:
+        case MISC_POP: // arm page 387
           // need to implement
+          iso = 1; // puts a 1 in the 0th bit to compare to reglist
+          printf("reglist: %d\n", misc.instr.pop.reg_list);
+      
+          for(int j = 0; j <= 7 ; j++)
+          {
+               printf("in loop, register %d: %s", j, ((iso & misc.instr.pop.reg_list > 0)? "true" : "false"));
+               if((iso & misc.instr.pop.reg_list) > 0){
+                  rf.write(rf[j], rf[SP_REG]);
+                  rf.write(rf[SP_REG], rf[SP_REG] + 4); 
+                  printf("popping");
+                  
+               }
+               iso <<= 1;
+               printf("iso: %d", iso);
+          }
+          cerr << "done popping" << endl;
+          if(misc.instr.pop.m > 0)
+          {
+               rf.write(rf[PC_REG], rf[SP_REG]);
+               rf.write(rf[SP_REG], rf[SP_REG] + 4); 
+               printf("popping lr -> pc\n");
+
+          }
+
+          //cout << "\t\tpopped" << endl;
           break;
         case MISC_SUB:
           // functionally complete, needs stats
           rf.write(SP_REG, SP - (misc.instr.sub.imm*4));
+          //cout << "\t\tmiscsub" << endl;
           break;
         case MISC_ADD:
           // functionally complete, needs stats
           rf.write(SP_REG, SP + (misc.instr.add.imm*4));
+          //cout << "\t\tmiscadd" << endl;
           break;
       }
       break;
@@ -365,7 +446,7 @@ void execute() {
       rf.write(addsp.instr.add.rd, SP + (addsp.instr.add.imm*4));
       break;
     default:
-      cout << "[ERROR] Unknown Instruction to be executed" << endl;
+      cerr << "[ERROR416] Unknown Instruction to be executed"  << endl;
       exit(1);
       break;
   }

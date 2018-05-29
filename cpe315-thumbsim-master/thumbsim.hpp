@@ -2,6 +2,7 @@
 #define _DECODE_H_
 #include <unistd.h>
 #include <iostream>
+#include <stdio.h>
 #include <vector>
 #include <algorithm>
 #include <map>
